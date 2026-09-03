@@ -6,7 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
-@TeleOp(name = "Basic TeleOp")
+@TeleOp(name = "Basic TeleOp", group = "Linear OpMode")
 public class BasicTeleOp extends LinearOpMode {
 
     @Override
