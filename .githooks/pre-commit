@@ -1,0 +1,50 @@
+#!/bin/sh
+# Reject staged content that adds emoji characters.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Bypass (only if you truly need to) with:
+#   git commit --no-verify
+
+python3 - <<'PY'
+import re
+import subprocess
+import sys
+
+# Common emoji code-point ranges. Escape sequences only (no literal
+# emoji in this source), so the hook does not reject itself.
+EMOJI_RE = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"  # Misc symbols, pictographs, emoticons
+    "\U0001F000-\U0001F0FF"  # Mahjong, dominos, playing cards
+    "\u2600-\u27BF"          # Misc Symbols and Dingbats
+    "]"
+)
+
+changed = subprocess.check_output(
+    ["git", "diff", "--cached", "--diff-filter=ACM", "--name-only", "-z"]
+).decode("utf-8", "replace").split("\0")
+changed = [f for f in changed if f]
+
+offenders = []
+for path in changed:
+    try:
+        diff = subprocess.check_output(
+            ["git", "diff", "--cached", "--unified=0", "--", path]
+        ).decode("utf-8", "replace")
+    except subprocess.CalledProcessError:
+        continue
+    for raw in diff.splitlines():
+        if raw.startswith("+++") or not raw.startswith("+"):
+            continue
+        if EMOJI_RE.search(raw):
+            offenders.append((path, raw[:160]))
+
+if offenders:
+    sys.stderr.write("pre-commit: emoji characters are not allowed in this repository.\n")
+    sys.stderr.write("Staged additions containing emoji:\n")
+    for path, line in offenders:
+        sys.stderr.write("  {}: {}\n".format(path, line))
+    sys.exit(1)
+PY
