@@ -45,10 +45,19 @@ public class BasicTeleOp extends LinearOpMode {
 
         waitForStart();
 
+        double headingOffset = 0.0;
+        boolean prevOptions = false;
+
         while (opModeIsActive()) {
             pinpoint.update();
             Pose2D pose = pinpoint.getPosition();
-            double heading = pose.getHeading(AngleUnit.RADIANS);
+
+            if (gamepad1.options && !prevOptions) {
+                headingOffset = pose.getHeading(AngleUnit.RADIANS);
+            }
+            prevOptions = gamepad1.options;
+
+            double heading = pose.getHeading(AngleUnit.RADIANS) - headingOffset;
 
             double fieldForward = -gamepad1.left_stick_y;
             double fieldRight   =  gamepad1.left_stick_x;
