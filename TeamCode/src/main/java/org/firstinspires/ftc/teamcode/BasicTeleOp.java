@@ -46,18 +46,20 @@ public class BasicTeleOp extends LinearOpMode {
         waitForStart();
 
         double headingOffset = 0.0;
-        boolean prevOptions = false;
+        boolean prevResetButton = false;
 
         while (opModeIsActive()) {
             pinpoint.update();
             Pose2D pose = pinpoint.getPosition();
+            double rawHeading = pose.getHeading(AngleUnit.RADIANS);
 
-            if (gamepad1.options && !prevOptions) {
-                headingOffset = pose.getHeading(AngleUnit.RADIANS);
+            boolean resetButton = gamepad1.options || gamepad1.b;
+            if (resetButton && !prevResetButton) {
+                headingOffset = rawHeading;
             }
-            prevOptions = gamepad1.options;
+            prevResetButton = resetButton;
 
-            double heading = pose.getHeading(AngleUnit.RADIANS) - headingOffset;
+            double heading = rawHeading - headingOffset;
 
             double fieldForward = -gamepad1.left_stick_y;
             double fieldRight   =  gamepad1.left_stick_x;
@@ -95,7 +97,8 @@ public class BasicTeleOp extends LinearOpMode {
             rightRear.setPower(rightRearPower);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
-            telemetry.addData("Heading (deg)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
+            telemetry.addData("Heading raw (deg)",  "%.1f", Math.toDegrees(rawHeading));
+            telemetry.addData("Heading used (deg)", "%.1f", Math.toDegrees(heading));
             telemetry.addData("Field", "fwd=%.2f right=%.2f yaw=%.2f", fieldForward, fieldRight, yaw);
             telemetry.addData("Robot", "axial=%.2f lateral=%.2f", axial, lateral);
             telemetry.update();
