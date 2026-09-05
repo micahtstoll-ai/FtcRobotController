@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -23,6 +24,15 @@ public class BasicTeleOp extends LinearOpMode {
     private static final double INTAKE_MIN_RPM       = 0.0;
     private static final double INTAKE_MAX_RPM       = 1150.0;
     private static final double INTAKE_TRIGGER_THRESHOLD = 0.25;
+    // Slew rate limit on the commanded intake velocity. Protects gearbox, chain,
+    // and motor from step changes (start/stop and forward-reverse reversals).
+    // Expressed as RPM per second at the output shaft; 2000 RPM/s ramps
+    // 0->1000 in ~0.5 s and a full reversal in ~1 s.
+    private static final double INTAKE_MAX_ACCEL_RPM_PER_SEC = 2000.0;
+    private static final double INTAKE_MAX_ACCEL_TPS2        =
+            INTAKE_MAX_ACCEL_RPM_PER_SEC * INTAKE_TICKS_PER_REV / 60.0;
+    // Cap dt so a stalled first frame or a long pause can't produce a huge jump.
+    private static final double INTAKE_MAX_DT_SEC = 0.1;
 
     @Override
     public void runOpMode() {
@@ -70,6 +80,8 @@ public class BasicTeleOp extends LinearOpMode {
         boolean prevIntakeTrim   = false;
         boolean prevDpadUp       = false;
         boolean prevDpadDown     = false;
+        double  intakeCommandedTps = 0.0;  // slew-limited value actually sent to the motor
+        ElapsedTime intakeSlewTimer = new ElapsedTime();
 
         while (opModeIsActive()) {
             pinpoint.update();
@@ -149,16 +161,30 @@ public class BasicTeleOp extends LinearOpMode {
 
             boolean intakeReverse = gamepad1.left_trigger > INTAKE_TRIGGER_THRESHOLD;
             double intakeTargetTps = intakeTargetRpm * INTAKE_TICKS_PER_REV / 60.0;
-            double intakeCommandTps =
+            double intakeDesiredTps =
                     intakeEnabled ? (intakeReverse ? -intakeTargetTps : intakeTargetTps) : 0.0;
-            intake.setVelocity(intakeCommandTps);
+
+            // Slew-limit the commanded velocity toward the desired value so state
+            // changes (on/off toggle, direction reversal, setpoint jumps) apply as
+            // ramps rather than steps. Bounds the peak torque impulse the intake
+            // gearbox and chain see.
+            double dt = Math.min(intakeSlewTimer.seconds(), INTAKE_MAX_DT_SEC);
+            intakeSlewTimer.reset();
+            double maxDelta = INTAKE_MAX_ACCEL_TPS2 * dt;
+            double error = intakeDesiredTps - intakeCommandedTps;
+            if (error >  maxDelta) error =  maxDelta;
+            if (error < -maxDelta) error = -maxDelta;
+            intakeCommandedTps += error;
+            intake.setVelocity(intakeCommandedTps);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
-            telemetry.addData("Intake", "state=%s dir=%s trim=%s target=%.0f rpm actual=%.0f rpm",
+            telemetry.addData("Intake",
+                    "state=%s dir=%s trim=%s target=%.0f cmd=%.0f actual=%.0f rpm",
                     intakeEnabled ? "ON" : "OFF",
                     intakeReverse ? "REV" : "FWD",
                     intakeTrimMode ? "ON" : "off",
                     intakeTargetRpm,
+                    intakeCommandedTps * 60.0 / INTAKE_TICKS_PER_REV,
                     intake.getVelocity() * 60.0 / INTAKE_TICKS_PER_REV);
             // Displayed heading is negated so a left (CCW) turn reads negative,
             // matching compass convention. The rotation math above still uses
