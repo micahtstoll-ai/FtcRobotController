@@ -6,34 +6,38 @@ import com.pedropathing.ftc.FollowerBuilder;
 import com.pedropathing.ftc.drivetrains.MecanumConstants;
 import com.pedropathing.ftc.localization.constants.PinpointConstants;
 import com.pedropathing.paths.PathConstraints;
-import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.teamcode.hardware.RobotHardware;
 
+/**
+ * Pedro Pathing configuration bound to {@link RobotHardware}. All pod and motor
+ * values are sourced from RobotHardware so a wiring change updates every consumer
+ * (OpModes, subsystems, and Pedro) from one place.
+ */
 public class Constants {
+
     public static FollowerConstants followerConstants = new FollowerConstants();
 
-    // Mirrors the pod config verified in MotorTest.java. PinpointConstants
-    // renames the goBILDA driver's first/second setOffsets args as
-    // forwardPodY/strafePodX; values pass through unchanged.
+    // PinpointConstants renames the goBILDA driver's first/second setOffsets args
+    // as forwardPodY / strafePodX; values pass through unchanged.
     public static PinpointConstants pinpointConstants = new PinpointConstants()
-            .forwardPodY(-90.0)
-            .strafePodX(-12.0)
+            .forwardPodY(RobotHardware.PINPOINT_FORWARD_POD_Y_MM)
+            .strafePodX(RobotHardware.PINPOINT_STRAFE_POD_X_MM)
             .distanceUnit(DistanceUnit.MM)
-            .hardwareMapName("pinpoint")
-            .encoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD)
-            .forwardEncoderDirection(GoBildaPinpointDriver.EncoderDirection.REVERSED)
-            .strafeEncoderDirection(GoBildaPinpointDriver.EncoderDirection.FORWARD);
+            .hardwareMapName(RobotHardware.PINPOINT)
+            .encoderResolution(RobotHardware.PINPOINT_POD_TYPE)
+            .forwardEncoderDirection(RobotHardware.PINPOINT_FORWARD_DIR)
+            .strafeEncoderDirection(RobotHardware.PINPOINT_STRAFE_DIR);
 
-    // Left FORWARD / right REVERSE matches BasicTeleOp.java and MotorTest.java;
-    // Pedro's MecanumConstants defaults are flipped, so override explicitly.
+    // Pedro's MecanumConstants defaults are flipped from this robot's wiring;
+    // override every direction explicitly from RobotHardware.
     public static MecanumConstants mecanumConstants = new MecanumConstants()
-            .leftFrontMotorDirection(DcMotorSimple.Direction.FORWARD)
-            .leftRearMotorDirection(DcMotorSimple.Direction.FORWARD)
-            .rightFrontMotorDirection(DcMotorSimple.Direction.REVERSE)
-            .rightRearMotorDirection(DcMotorSimple.Direction.REVERSE);
+            .leftFrontMotorDirection(RobotHardware.LEFT_FRONT_DIR)
+            .leftRearMotorDirection(RobotHardware.LEFT_REAR_DIR)
+            .rightFrontMotorDirection(RobotHardware.RIGHT_FRONT_DIR)
+            .rightRearMotorDirection(RobotHardware.RIGHT_REAR_DIR);
 
     public static PathConstraints pathConstraints = new PathConstraints(0.99, 100, 1, 1);
 

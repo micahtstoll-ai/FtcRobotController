@@ -22,3 +22,35 @@ Build validation is not always possible in remote sandbox environments
 because the Android Gradle plugin may be unreachable. When you cannot
 run `./gradlew :TeamCode:compileDebugJavaWithJavac`, say so explicitly
 in the change description rather than claiming a green build.
+
+## TeamCode conventions
+
+Team-authored code lives under
+`TeamCode/src/main/java/org/firstinspires/ftc/teamcode/` and is split into
+four packages:
+
+    hardware/       Single source of truth for hardware configuration.
+    subsystems/     Loop-time behavior wrapped around hardware.
+    opmodes/        Classes the Driver Station lists (@TeleOp / @Autonomous).
+    pedroPathing/   Pedro Pathing configuration (package name is fixed by Pedro).
+
+Rules:
+
+- Any change to a hardware-map name or wiring convention (motor direction,
+  odometry pod offset, encoder direction) belongs in
+  `hardware/RobotHardware.java` and nowhere else. Pedro's `Constants.java`
+  reads from it; OpModes read from it via subsystems.
+
+- Hardware-map string names (`"leftFront"`, `"pinpoint"`, etc.) live only
+  in `RobotHardware`. A literal outside that class is a bug.
+
+- A subsystem owns its motors and exposes intent-level methods
+  (`drive`, `setDesiredRpm`). OpModes must not touch `hardwareMap.get(...)`
+  for anything a subsystem covers; if hardware has no subsystem yet, add
+  one or add a factory to `RobotHardware`.
+
+- OpMode display names use the pattern `"TeleOp: X"` or `"Auto: X"` for
+  Driver Station grouping.
+
+See `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/readme.md`
+for the "adding a new subsystem" checklist.

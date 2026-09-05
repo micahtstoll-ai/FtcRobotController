@@ -1,55 +1,42 @@
-package org.firstinspires.ftc.teamcode;
+package org.firstinspires.ftc.teamcode.opmodes;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.DcMotorEx;
-import com.qualcomm.robotcore.hardware.DcMotorSimple;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.teamcode.hardware.RobotHardware;
+import org.firstinspires.ftc.teamcode.subsystems.MecanumDrive;
 
-@Autonomous(name = "Motor Test")
-public class MotorTest extends LinearOpMode {
+/**
+ * Odometry calibration autonomous. During init, prompts a pod-direction check
+ * (push the robot around and confirm X / Y signs). On start, drives a 36-inch
+ * square in cardinal directions and then eight diagonal legs, using Pinpoint
+ * closed-loop for cross-track and heading correction. Encoder-direction and
+ * motor-direction bugs both show up as the square failing to close.
+ */
+@Autonomous(name = "Auto: Calibrate Odometry")
+public class AutoCalibrateOdometry extends LinearOpMode {
 
-    private static final double POWER = 0.3;
-    private static final double SIDE_IN = 36.0;
+    private static final double POWER        = 0.3;
+    private static final double SIDE_IN      = 36.0;
     private static final double HALF_DIAG_IN = 18.0 * Math.sqrt(2.0);
 
-    private static final double RAMP_INCHES = 6.0;
+    private static final double RAMP_INCHES    = 6.0;
     private static final double MIN_POWER_FRAC = 0.30;
     private static final double CROSS_TRACK_KP = 0.20;
-    private static final double HEADING_KP = 0.03;
-    private static final long SETTLE_MS = 100;
+    private static final double HEADING_KP     = 0.03;
+    private static final long   SETTLE_MS      = 100;
 
-    private DcMotorEx leftFront;
-    private DcMotorEx rightFront;
-    private DcMotorEx leftRear;
-    private DcMotorEx rightRear;
+    private MecanumDrive drive;
     private GoBildaPinpointDriver pinpoint;
 
     @Override
     public void runOpMode() {
-        leftFront  = hardwareMap.get(DcMotorEx.class, "leftFront");
-        rightFront = hardwareMap.get(DcMotorEx.class, "rightFront");
-        leftRear   = hardwareMap.get(DcMotorEx.class, "leftRear");
-        rightRear  = hardwareMap.get(DcMotorEx.class, "rightRear");
-
-        rightFront.setDirection(DcMotorSimple.Direction.REVERSE);
-        rightRear.setDirection(DcMotorSimple.Direction.REVERSE);
-
-        leftFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        leftRear.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightRear.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-
-        pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");
-        pinpoint.setOffsets(-90.0, -12.0, DistanceUnit.MM);
-        pinpoint.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        pinpoint.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.REVERSED,
-                                      GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        drive    = new MecanumDrive(hardwareMap);
+        pinpoint = RobotHardware.getPinpoint(hardwareMap);
         pinpoint.resetPosAndIMU();
 
         while (!isStarted() && !isStopRequested()) {
@@ -59,7 +46,7 @@ public class MotorTest extends LinearOpMode {
             telemetry.addLine("  forward  -> X should INCREASE");
             telemetry.addLine("  left     -> Y should INCREASE");
             telemetry.addLine("If either goes the wrong way, flip that pod's");
-            telemetry.addLine("EncoderDirection constant in the code.");
+            telemetry.addLine("EncoderDirection in RobotHardware.");
             telemetry.addData("X (in)", "%.2f", p.getX(DistanceUnit.INCH));
             telemetry.addData("Y (in)", "%.2f", p.getY(DistanceUnit.INCH));
             telemetry.addData("Heading (deg)", "%.1f", p.getHeading(AngleUnit.DEGREES));
@@ -82,9 +69,15 @@ public class MotorTest extends LinearOpMode {
         driveFor(-1, -1, HALF_DIAG_IN);  driveFor( 1,  1, HALF_DIAG_IN);
         driveFor( 1, -1, HALF_DIAG_IN);  driveFor(-1,  1, HALF_DIAG_IN);
 
-        stopMotors();
+        drive.stop();
     }
 
+    /**
+     * Drive along a robot-frame axis-aligned or diagonal direction for a given
+     * distance, correcting cross-track error and heading drift with proportional
+     * feedback from Pinpoint. axial = forward, lateral = right (unit-magnitude
+     * per component; normalized inside).
+     */
     private void driveFor(double axial, double lateral, double distanceInches) {
         if (!opModeIsActive()) return;
 
@@ -122,47 +115,24 @@ public class MotorTest extends LinearOpMode {
             double lateralCorr = CROSS_TRACK_KP * (-corrPinY);
 
             double headingErr = now.getHeading(AngleUnit.DEGREES) - startHeadingDeg;
-            while (headingErr > 180)  headingErr -= 360;
+            while (headingErr >  180) headingErr -= 360;
             while (headingErr < -180) headingErr += 360;
             double yawCorr = HEADING_KP * headingErr;
 
-            double axialCmd   = axial   * speedScale + axialCorr;
-            double lateralCmd = lateral * speedScale + lateralCorr;
+            drive.drive(axial   * speedScale + axialCorr,
+                        lateral * speedScale + lateralCorr,
+                        yawCorr,
+                        POWER);
 
-            double lf = axialCmd + lateralCmd + yawCorr;
-            double rf = axialCmd - lateralCmd - yawCorr;
-            double lr = axialCmd - lateralCmd + yawCorr;
-            double rr = axialCmd + lateralCmd - yawCorr;
-
-            double max = Math.max(Math.max(Math.abs(lf), Math.abs(rf)),
-                                  Math.max(Math.abs(lr), Math.abs(rr)));
-            if (max > 1.0) {
-                lf /= max;
-                rf /= max;
-                lr /= max;
-                rr /= max;
-            }
-
-            leftFront.setPower(lf * POWER);
-            rightFront.setPower(rf * POWER);
-            leftRear.setPower(lr * POWER);
-            rightRear.setPower(rr * POWER);
-
-            telemetry.addData("Target / Progress (in)", "%.2f / %.2f", distanceInches, progress);
+            telemetry.addData("Target / Progress (in)", "%.2f / %.2f",
+                    distanceInches, progress);
             telemetry.addData("Cross-track (in)", "%.2f", crossTrack);
             telemetry.addData("Heading err (deg)", "%.2f", headingErr);
             telemetry.addData("Speed scale", "%.2f", speedScale);
             telemetry.update();
         }
 
-        stopMotors();
+        drive.stop();
         if (opModeIsActive()) sleep(SETTLE_MS);
-    }
-
-    private void stopMotors() {
-        leftFront.setPower(0.0);
-        rightFront.setPower(0.0);
-        leftRear.setPower(0.0);
-        rightRear.setPower(0.0);
     }
 }
