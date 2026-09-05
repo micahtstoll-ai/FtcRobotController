@@ -16,12 +16,20 @@ public class BasicTeleOp extends LinearOpMode {
 
     private static final double SLOW_MODE_SCALE = 0.35;
 
+    // Yellow Jacket 1150 RPM (goBILDA 5202/5203/5204 series): 145.1 ticks per output rev.
+    private static final double INTAKE_TICKS_PER_REV = 145.1;
+    private static final double INTAKE_TARGET_RPM    = 1000.0;
+    private static final double INTAKE_TARGET_TPS    =
+            INTAKE_TARGET_RPM * INTAKE_TICKS_PER_REV / 60.0;
+    private static final double INTAKE_TRIGGER_THRESHOLD = 0.25;
+
     @Override
     public void runOpMode() {
         DcMotorEx leftFront  = hardwareMap.get(DcMotorEx.class, "leftFront");
         DcMotorEx rightFront = hardwareMap.get(DcMotorEx.class, "rightFront");
         DcMotorEx leftRear   = hardwareMap.get(DcMotorEx.class, "leftRear");
         DcMotorEx rightRear  = hardwareMap.get(DcMotorEx.class, "rightRear");
+        DcMotorEx intake     = hardwareMap.get(DcMotorEx.class, "intake");
 
         rightFront.setDirection(DcMotorSimple.Direction.REVERSE);
         rightRear.setDirection(DcMotorSimple.Direction.REVERSE);
@@ -30,6 +38,12 @@ public class BasicTeleOp extends LinearOpMode {
         rightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         leftRear.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         rightRear.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+        // Intake runs a built-in PIDF velocity loop. FLOAT so game pieces can free-wheel
+        // through the intake when the trigger is released.
+        intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        intake.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         // Pinpoint config mirrors MotorTest.java / pedroPathing/Constants.java.
         GoBildaPinpointDriver pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");
@@ -96,7 +110,16 @@ public class BasicTeleOp extends LinearOpMode {
             leftRear.setPower(leftRearPower);
             rightRear.setPower(rightRearPower);
 
+            // Intake: left trigger past threshold commands 1000 RPM, else 0. Not scaled
+            // by slow mode.
+            boolean intakeOn = gamepad1.left_trigger > INTAKE_TRIGGER_THRESHOLD;
+            intake.setVelocity(intakeOn ? INTAKE_TARGET_TPS : 0.0);
+
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
+            telemetry.addData("Intake", "cmd=%s target=%.0f rpm actual=%.0f rpm",
+                    intakeOn ? "ON" : "off",
+                    INTAKE_TARGET_RPM,
+                    intake.getVelocity() * 60.0 / INTAKE_TICKS_PER_REV);
             // Displayed heading is negated so a left (CCW) turn reads negative,
             // matching compass convention. The rotation math above still uses
             // the raw Pinpoint value in its native CCW-positive convention.
