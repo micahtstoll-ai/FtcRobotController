@@ -24,7 +24,7 @@ android {
     // metadata minCompileSdk requirements. minSdk and targetSdk are
     // deliberately left alone; compileSdk only widens the API surface
     // available at build time.
-    compileSdkVersion 34
+    compileSdkVersion 36
 
     packagingOptions {
         jniLibs.useLegacyPackaging true
