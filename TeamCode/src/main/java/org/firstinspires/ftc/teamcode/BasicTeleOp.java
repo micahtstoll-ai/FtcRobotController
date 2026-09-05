@@ -63,15 +63,12 @@ public class BasicTeleOp extends LinearOpMode {
             double yaw          =  gamepad1.right_stick_x;
 
             // Rotate the field-frame command into the robot frame.
-            // Signs verified empirically against this robot: at h ~= -pi/2
-            // (chassis turned 90 deg right) with left stick forward, this
-            // formula strafes the robot to its own right, which is
-            // field-forward. Do not "fix" this to a textbook Y-left
-            // derivation without re-testing on hardware.
+            // Assumes Pinpoint heading is CCW-positive in a Y-left field
+            // frame (same convention MotorTest.driveFor relies on).
             double cos = Math.cos(heading);
             double sin = Math.sin(heading);
-            double axial   =  fieldForward * cos + fieldRight * sin;
-            double lateral = -fieldForward * sin + fieldRight * cos;
+            double axial   = fieldForward * cos - fieldRight * sin;
+            double lateral = fieldForward * sin + fieldRight * cos;
 
             double scale = gamepad1.right_bumper ? SLOW_MODE_SCALE : 1.0;
             axial   *= scale;
@@ -99,11 +96,11 @@ public class BasicTeleOp extends LinearOpMode {
             rightRear.setPower(rightRearPower);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
-            // Negated for driver-facing compass convention (left turn = negative).
-            // The rotation math above consumes the raw Pinpoint value directly.
-            telemetry.addData("Heading (deg)", "%.1f", -Math.toDegrees(heading));
+            telemetry.addData("Heading raw (deg)", "%.1f", Math.toDegrees(heading));
             telemetry.addData("Field", "fwd=%.2f right=%.2f yaw=%.2f", fieldForward, fieldRight, yaw);
             telemetry.addData("Robot", "axial=%.2f lateral=%.2f", axial, lateral);
+            telemetry.addData("Wheels", "LF=%.2f RF=%.2f LR=%.2f RR=%.2f",
+                    leftFrontPower, rightFrontPower, leftRearPower, rightRearPower);
             telemetry.update();
         }
     }
