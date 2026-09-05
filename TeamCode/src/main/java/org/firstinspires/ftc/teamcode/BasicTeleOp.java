@@ -59,31 +59,34 @@ public class BasicTeleOp extends LinearOpMode {
 
         waitForStart();
 
-        double headingOffset = 0.0;
         boolean prevResetButton = false;
 
         while (opModeIsActive()) {
-            pinpoint.update();
-            Pose2D pose = pinpoint.getPosition();
-            double rawHeading = pose.getHeading(AngleUnit.RADIANS);
-
             boolean resetButton = gamepad1.options || gamepad1.b;
             if (resetButton && !prevResetButton) {
-                headingOffset = rawHeading;
+                pinpoint.resetPosAndIMU();
             }
             prevResetButton = resetButton;
 
-            double heading = rawHeading - headingOffset;
+            pinpoint.update();
+            Pose2D pose = pinpoint.getPosition();
+            // Pinpoint on this robot reports heading CW-positive (verified
+            // on the driver station: a physical right turn shows +90 deg).
+            // Negate here so the rotation math below can use its native
+            // CCW-positive convention unchanged.
+            double heading = -pose.getHeading(AngleUnit.RADIANS);
 
             double fieldForward = -gamepad1.left_stick_y;
             double fieldRight   =  gamepad1.left_stick_x;
             double yaw          =  gamepad1.right_stick_x;
 
-            // Rotate the field-frame command by -heading into the robot frame.
+            // Rotate the field-frame command into the robot frame.
+            // Assumes Pinpoint heading is CCW-positive in a Y-left field
+            // frame (same convention MotorTest.driveFor relies on).
             double cos = Math.cos(heading);
             double sin = Math.sin(heading);
-            double axial   =  fieldForward * cos + fieldRight * sin;
-            double lateral = -fieldForward * sin + fieldRight * cos;
+            double axial   = fieldForward * cos - fieldRight * sin;
+            double lateral = fieldForward * sin + fieldRight * cos;
 
             double scale = gamepad1.right_bumper ? SLOW_MODE_SCALE : 1.0;
             axial   *= scale;
@@ -120,13 +123,11 @@ public class BasicTeleOp extends LinearOpMode {
                     intakeOn ? "ON" : "off",
                     INTAKE_TARGET_RPM,
                     intake.getVelocity() * 60.0 / INTAKE_TICKS_PER_REV);
-            // Displayed heading is negated so a left (CCW) turn reads negative,
-            // matching compass convention. The rotation math above still uses
-            // the raw Pinpoint value in its native CCW-positive convention.
-            telemetry.addData("Heading raw (deg)",  "%.1f", -Math.toDegrees(rawHeading));
-            telemetry.addData("Heading used (deg)", "%.1f", -Math.toDegrees(heading));
+            telemetry.addData("Heading raw (deg)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
             telemetry.addData("Field", "fwd=%.2f right=%.2f yaw=%.2f", fieldForward, fieldRight, yaw);
             telemetry.addData("Robot", "axial=%.2f lateral=%.2f", axial, lateral);
+            telemetry.addData("Wheels", "LF=%.2f RF=%.2f LR=%.2f RR=%.2f",
+                    leftFrontPower, rightFrontPower, leftRearPower, rightRearPower);
             telemetry.update();
         }
     }
