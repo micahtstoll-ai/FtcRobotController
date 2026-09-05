@@ -63,14 +63,15 @@ public class BasicTeleOp extends LinearOpMode {
             double yaw          =  gamepad1.right_stick_x;
 
             // Rotate the field-frame command into the robot frame.
-            // Pinpoint reports heading CCW-positive in a Y-left field frame,
-            // so driver's "right" on the stick is -field-Y. That gives:
-            //   axial   =  fieldForward*cos(h) - fieldRight*sin(h)
-            //   lateral =  fieldForward*sin(h) + fieldRight*cos(h)
+            // Signs verified empirically against this robot: at h ~= -pi/2
+            // (chassis turned 90 deg right) with left stick forward, this
+            // formula strafes the robot to its own right, which is
+            // field-forward. Do not "fix" this to a textbook Y-left
+            // derivation without re-testing on hardware.
             double cos = Math.cos(heading);
             double sin = Math.sin(heading);
-            double axial   = fieldForward * cos - fieldRight * sin;
-            double lateral = fieldForward * sin + fieldRight * cos;
+            double axial   =  fieldForward * cos + fieldRight * sin;
+            double lateral = -fieldForward * sin + fieldRight * cos;
 
             double scale = gamepad1.right_bumper ? SLOW_MODE_SCALE : 1.0;
             axial   *= scale;
