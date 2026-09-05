@@ -18,9 +18,10 @@ public class BasicTeleOp extends LinearOpMode {
 
     // Yellow Jacket 1150 RPM (goBILDA 5202/5203/5204 series): 145.1 ticks per output rev.
     private static final double INTAKE_TICKS_PER_REV = 145.1;
-    private static final double INTAKE_TARGET_RPM    = 1000.0;
-    private static final double INTAKE_TARGET_TPS    =
-            INTAKE_TARGET_RPM * INTAKE_TICKS_PER_REV / 60.0;
+    private static final double INTAKE_INITIAL_RPM   = 1000.0;
+    private static final double INTAKE_RPM_STEP      = 25.0;
+    private static final double INTAKE_MIN_RPM       = 0.0;
+    private static final double INTAKE_MAX_RPM       = 1150.0;
     private static final double INTAKE_TRIGGER_THRESHOLD = 0.25;
 
     @Override
@@ -61,6 +62,14 @@ public class BasicTeleOp extends LinearOpMode {
 
         double headingOffset = 0.0;
         boolean prevResetButton = false;
+
+        double  intakeTargetRpm  = INTAKE_INITIAL_RPM;
+        int     intakeSign       = 1;      // +1 forward, -1 reversed
+        boolean intakeTrimMode   = false;  // toggled by X; when true, dpad up/down trims setpoint
+        boolean prevIntakeSwap   = false;
+        boolean prevIntakeTrim   = false;
+        boolean prevDpadUp       = false;
+        boolean prevDpadDown     = false;
 
         while (opModeIsActive()) {
             pinpoint.update();
@@ -110,15 +119,44 @@ public class BasicTeleOp extends LinearOpMode {
             leftRear.setPower(leftRearPower);
             rightRear.setPower(rightRearPower);
 
-            // Intake: left trigger past threshold commands 1000 RPM, else 0. Not scaled
-            // by slow mode.
+            // Intake controls. Not scaled by slow mode.
+            // - Left trigger past threshold: run at current setpoint (signed by intakeSign).
+            // - Left bumper (edge): flip spin direction.
+            // - X (edge): toggle trim mode.
+            // - In trim mode, D-pad up/down (edge): adjust setpoint by INTAKE_RPM_STEP.
+            boolean intakeSwap = gamepad1.left_bumper;
+            if (intakeSwap && !prevIntakeSwap) {
+                intakeSign = -intakeSign;
+            }
+            prevIntakeSwap = intakeSwap;
+
+            boolean intakeTrim = gamepad1.x;
+            if (intakeTrim && !prevIntakeTrim) {
+                intakeTrimMode = !intakeTrimMode;
+            }
+            prevIntakeTrim = intakeTrim;
+
+            boolean dpadUp   = gamepad1.dpad_up;
+            boolean dpadDown = gamepad1.dpad_down;
+            if (intakeTrimMode) {
+                if (dpadUp   && !prevDpadUp)   intakeTargetRpm += INTAKE_RPM_STEP;
+                if (dpadDown && !prevDpadDown) intakeTargetRpm -= INTAKE_RPM_STEP;
+                intakeTargetRpm = Math.max(INTAKE_MIN_RPM,
+                                  Math.min(INTAKE_MAX_RPM, intakeTargetRpm));
+            }
+            prevDpadUp   = dpadUp;
+            prevDpadDown = dpadDown;
+
             boolean intakeOn = gamepad1.left_trigger > INTAKE_TRIGGER_THRESHOLD;
-            intake.setVelocity(intakeOn ? INTAKE_TARGET_TPS : 0.0);
+            double intakeTargetTps = intakeTargetRpm * INTAKE_TICKS_PER_REV / 60.0;
+            intake.setVelocity(intakeOn ? intakeSign * intakeTargetTps : 0.0);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
-            telemetry.addData("Intake", "cmd=%s target=%.0f rpm actual=%.0f rpm",
+            telemetry.addData("Intake", "cmd=%s dir=%s trim=%s target=%.0f rpm actual=%.0f rpm",
                     intakeOn ? "ON" : "off",
-                    INTAKE_TARGET_RPM,
+                    intakeSign > 0 ? "FWD" : "REV",
+                    intakeTrimMode ? "ON" : "off",
+                    intakeTargetRpm,
                     intake.getVelocity() * 60.0 / INTAKE_TICKS_PER_REV);
             // Displayed heading is negated so a left (CCW) turn reads negative,
             // matching compass convention. The rotation math above still uses
