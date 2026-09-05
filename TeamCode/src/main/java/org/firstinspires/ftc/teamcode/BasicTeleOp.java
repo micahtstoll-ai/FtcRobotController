@@ -97,8 +97,11 @@ public class BasicTeleOp extends LinearOpMode {
             rightRear.setPower(rightRearPower);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
-            telemetry.addData("Heading raw (deg)",  "%.1f", Math.toDegrees(rawHeading));
-            telemetry.addData("Heading used (deg)", "%.1f", Math.toDegrees(heading));
+            // Displayed heading is negated so a left (CCW) turn reads negative,
+            // matching compass convention. The rotation math above still uses
+            // the raw Pinpoint value in its native CCW-positive convention.
+            telemetry.addData("Heading raw (deg)",  "%.1f", -Math.toDegrees(rawHeading));
+            telemetry.addData("Heading used (deg)", "%.1f", -Math.toDegrees(heading));
             telemetry.addData("Field", "fwd=%.2f right=%.2f yaw=%.2f", fieldForward, fieldRight, yaw);
             telemetry.addData("Robot", "axial=%.2f lateral=%.2f", axial, lateral);
             telemetry.update();
