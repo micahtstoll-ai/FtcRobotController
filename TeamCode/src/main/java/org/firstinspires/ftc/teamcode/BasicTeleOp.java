@@ -64,9 +64,9 @@ public class BasicTeleOp extends LinearOpMode {
         boolean prevResetButton = false;
 
         double  intakeTargetRpm  = INTAKE_INITIAL_RPM;
-        int     intakeSign       = 1;      // +1 forward, -1 reversed
+        boolean intakeEnabled    = true;   // starts on; Y toggles.
         boolean intakeTrimMode   = false;  // toggled by X; when true, dpad up/down trims setpoint
-        boolean prevIntakeSwap   = false;
+        boolean prevIntakeToggle = false;
         boolean prevIntakeTrim   = false;
         boolean prevDpadUp       = false;
         boolean prevDpadDown     = false;
@@ -120,15 +120,15 @@ public class BasicTeleOp extends LinearOpMode {
             rightRear.setPower(rightRearPower);
 
             // Intake controls. Not scaled by slow mode.
-            // - Left trigger past threshold: run at current setpoint (signed by intakeSign).
-            // - Left bumper (edge): flip spin direction.
+            // - Starts ON at setpoint. Y (edge) toggles on/off.
+            // - Left trigger past threshold (while ON): reverses direction while held.
             // - X (edge): toggle trim mode.
             // - In trim mode, D-pad up/down (edge): adjust setpoint by INTAKE_RPM_STEP.
-            boolean intakeSwap = gamepad1.left_bumper;
-            if (intakeSwap && !prevIntakeSwap) {
-                intakeSign = -intakeSign;
+            boolean intakeToggle = gamepad1.y;
+            if (intakeToggle && !prevIntakeToggle) {
+                intakeEnabled = !intakeEnabled;
             }
-            prevIntakeSwap = intakeSwap;
+            prevIntakeToggle = intakeToggle;
 
             boolean intakeTrim = gamepad1.x;
             if (intakeTrim && !prevIntakeTrim) {
@@ -147,14 +147,16 @@ public class BasicTeleOp extends LinearOpMode {
             prevDpadUp   = dpadUp;
             prevDpadDown = dpadDown;
 
-            boolean intakeOn = gamepad1.left_trigger > INTAKE_TRIGGER_THRESHOLD;
+            boolean intakeReverse = gamepad1.left_trigger > INTAKE_TRIGGER_THRESHOLD;
             double intakeTargetTps = intakeTargetRpm * INTAKE_TICKS_PER_REV / 60.0;
-            intake.setVelocity(intakeOn ? intakeSign * intakeTargetTps : 0.0);
+            double intakeCommandTps =
+                    intakeEnabled ? (intakeReverse ? -intakeTargetTps : intakeTargetTps) : 0.0;
+            intake.setVelocity(intakeCommandTps);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
-            telemetry.addData("Intake", "cmd=%s dir=%s trim=%s target=%.0f rpm actual=%.0f rpm",
-                    intakeOn ? "ON" : "off",
-                    intakeSign > 0 ? "FWD" : "REV",
+            telemetry.addData("Intake", "state=%s dir=%s trim=%s target=%.0f rpm actual=%.0f rpm",
+                    intakeEnabled ? "ON" : "OFF",
+                    intakeReverse ? "REV" : "FWD",
                     intakeTrimMode ? "ON" : "off",
                     intakeTargetRpm,
                     intake.getVelocity() * 60.0 / INTAKE_TICKS_PER_REV);
