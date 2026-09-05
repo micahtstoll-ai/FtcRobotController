@@ -19,6 +19,13 @@ apply from: '../build.dependencies.gradle'
 android {
     namespace = 'org.firstinspires.ftc.teamcode'
 
+    // Override the SDK-common compileSdkVersion 30 so newer androidx
+    // transitives (pulled in by Pedro Pathing 2.1.2) meet their AAR
+    // metadata minCompileSdk requirements. minSdk and targetSdk are
+    // deliberately left alone; compileSdk only widens the API surface
+    // available at build time.
+    compileSdkVersion 36
+
     packagingOptions {
         jniLibs.useLegacyPackaging true
     }
