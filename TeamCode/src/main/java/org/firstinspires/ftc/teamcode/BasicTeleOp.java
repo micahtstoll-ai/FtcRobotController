@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -18,10 +19,22 @@ public class BasicTeleOp extends LinearOpMode {
 
     // Yellow Jacket 1150 RPM (goBILDA 5202/5203/5204 series): 145.1 ticks per output rev.
     private static final double INTAKE_TICKS_PER_REV = 145.1;
-    private static final double INTAKE_TARGET_RPM    = 1000.0;
-    private static final double INTAKE_TARGET_TPS    =
-            INTAKE_TARGET_RPM * INTAKE_TICKS_PER_REV / 60.0;
+    private static final double INTAKE_INITIAL_RPM   = 1000.0;
+    private static final double INTAKE_RPM_STEP      = 25.0;
+    private static final double INTAKE_MIN_RPM       = 0.0;
+    private static final double INTAKE_MAX_RPM       = 1150.0;
     private static final double INTAKE_TRIGGER_THRESHOLD = 0.25;
+    // Slew rate limit on the commanded intake velocity. Protects gearbox, chain,
+    // and motor from step changes (start/stop and forward-reverse reversals).
+    // Expressed as RPM per second at the output shaft. Sized below the motor's
+    // 1150 RPM top speed so the limit is meaningfully binding on both spin-up
+    // and reversal, not just reversal. At 1000 RPM/s: 0->setpoint(1000) in ~1 s,
+    // full 1000->-1000 reversal in ~2 s.
+    private static final double INTAKE_MAX_ACCEL_RPM_PER_SEC = 1000.0;
+    private static final double INTAKE_MAX_ACCEL_TPS2        =
+            INTAKE_MAX_ACCEL_RPM_PER_SEC * INTAKE_TICKS_PER_REV / 60.0;
+    // Cap dt so a stalled first frame or a long pause can't produce a huge jump.
+    private static final double INTAKE_MAX_DT_SEC = 0.1;
 
     @Override
     public void runOpMode() {
@@ -60,6 +73,16 @@ public class BasicTeleOp extends LinearOpMode {
         waitForStart();
 
         boolean prevResetButton = false;
+
+        double  intakeTargetRpm  = INTAKE_INITIAL_RPM;
+        boolean intakeEnabled    = true;   // starts on; Y toggles.
+        boolean intakeTrimMode   = false;  // toggled by X; when true, dpad up/down trims setpoint
+        boolean prevIntakeToggle = false;
+        boolean prevIntakeTrim   = false;
+        boolean prevDpadUp       = false;
+        boolean prevDpadDown     = false;
+        double  intakeCommandedTps = 0.0;  // slew-limited value actually sent to the motor
+        ElapsedTime intakeSlewTimer = new ElapsedTime();
 
         while (opModeIsActive()) {
             boolean resetButton = gamepad1.options || gamepad1.b;
@@ -112,15 +135,60 @@ public class BasicTeleOp extends LinearOpMode {
             leftRear.setPower(leftRearPower);
             rightRear.setPower(rightRearPower);
 
-            // Intake: left trigger past threshold commands 1000 RPM, else 0. Not scaled
-            // by slow mode.
-            boolean intakeOn = gamepad1.left_trigger > INTAKE_TRIGGER_THRESHOLD;
-            intake.setVelocity(intakeOn ? INTAKE_TARGET_TPS : 0.0);
+            // Intake controls. Not scaled by slow mode.
+            // - Starts ON at setpoint. Y (edge) toggles on/off.
+            // - Left trigger past threshold (while ON): reverses direction while held.
+            // - X (edge): toggle trim mode.
+            // - In trim mode, D-pad up/down (edge): adjust setpoint by INTAKE_RPM_STEP.
+            boolean intakeToggle = gamepad1.y;
+            if (intakeToggle && !prevIntakeToggle) {
+                intakeEnabled = !intakeEnabled;
+            }
+            prevIntakeToggle = intakeToggle;
+
+            boolean intakeTrim = gamepad1.x;
+            if (intakeTrim && !prevIntakeTrim) {
+                intakeTrimMode = !intakeTrimMode;
+            }
+            prevIntakeTrim = intakeTrim;
+
+            boolean dpadUp   = gamepad1.dpad_up;
+            boolean dpadDown = gamepad1.dpad_down;
+            if (intakeTrimMode) {
+                if (dpadUp   && !prevDpadUp)   intakeTargetRpm += INTAKE_RPM_STEP;
+                if (dpadDown && !prevDpadDown) intakeTargetRpm -= INTAKE_RPM_STEP;
+                intakeTargetRpm = Math.max(INTAKE_MIN_RPM,
+                                  Math.min(INTAKE_MAX_RPM, intakeTargetRpm));
+            }
+            prevDpadUp   = dpadUp;
+            prevDpadDown = dpadDown;
+
+            boolean intakeReverse = gamepad1.left_trigger > INTAKE_TRIGGER_THRESHOLD;
+            double intakeTargetTps = intakeTargetRpm * INTAKE_TICKS_PER_REV / 60.0;
+            double intakeDesiredTps =
+                    intakeEnabled ? (intakeReverse ? -intakeTargetTps : intakeTargetTps) : 0.0;
+
+            // Slew-limit the commanded velocity toward the desired value so state
+            // changes (on/off toggle, direction reversal, setpoint jumps) apply as
+            // ramps rather than steps. Bounds the peak torque impulse the intake
+            // gearbox and chain see.
+            double dt = Math.min(intakeSlewTimer.seconds(), INTAKE_MAX_DT_SEC);
+            intakeSlewTimer.reset();
+            double maxDelta = INTAKE_MAX_ACCEL_TPS2 * dt;
+            double error = intakeDesiredTps - intakeCommandedTps;
+            if (error >  maxDelta) error =  maxDelta;
+            if (error < -maxDelta) error = -maxDelta;
+            intakeCommandedTps += error;
+            intake.setVelocity(intakeCommandedTps);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
-            telemetry.addData("Intake", "cmd=%s target=%.0f rpm actual=%.0f rpm",
-                    intakeOn ? "ON" : "off",
-                    INTAKE_TARGET_RPM,
+            telemetry.addData("Intake",
+                    "state=%s dir=%s trim=%s target=%.0f cmd=%.0f actual=%.0f rpm",
+                    intakeEnabled ? "ON" : "OFF",
+                    intakeReverse ? "REV" : "FWD",
+                    intakeTrimMode ? "ON" : "off",
+                    intakeTargetRpm,
+                    intakeCommandedTps * 60.0 / INTAKE_TICKS_PER_REV,
                     intake.getVelocity() * 60.0 / INTAKE_TICKS_PER_REV);
             telemetry.addData("Heading raw (deg)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
             telemetry.addData("Field", "fwd=%.2f right=%.2f yaw=%.2f", fieldForward, fieldRight, yaw);
