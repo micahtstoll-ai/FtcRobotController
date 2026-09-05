@@ -56,7 +56,11 @@ public class BasicTeleOp extends LinearOpMode {
 
             pinpoint.update();
             Pose2D pose = pinpoint.getPosition();
-            double heading = pose.getHeading(AngleUnit.RADIANS);
+            // Pinpoint on this robot reports heading CW-positive (verified
+            // on the driver station: a physical right turn shows +90 deg).
+            // Negate here so the rotation math below can use its native
+            // CCW-positive convention unchanged.
+            double heading = -pose.getHeading(AngleUnit.RADIANS);
 
             double fieldForward = -gamepad1.left_stick_y;
             double fieldRight   =  gamepad1.left_stick_x;
@@ -96,7 +100,7 @@ public class BasicTeleOp extends LinearOpMode {
             rightRear.setPower(rightRearPower);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
-            telemetry.addData("Heading raw (deg)", "%.1f", Math.toDegrees(heading));
+            telemetry.addData("Heading raw (deg)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
             telemetry.addData("Field", "fwd=%.2f right=%.2f yaw=%.2f", fieldForward, fieldRight, yaw);
             telemetry.addData("Robot", "axial=%.2f lateral=%.2f", axial, lateral);
             telemetry.addData("Wheels", "LF=%.2f RF=%.2f LR=%.2f RR=%.2f",
