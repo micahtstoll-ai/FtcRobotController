@@ -26,9 +26,11 @@ public class BasicTeleOp extends LinearOpMode {
     private static final double INTAKE_TRIGGER_THRESHOLD = 0.25;
     // Slew rate limit on the commanded intake velocity. Protects gearbox, chain,
     // and motor from step changes (start/stop and forward-reverse reversals).
-    // Expressed as RPM per second at the output shaft; 2000 RPM/s ramps
-    // 0->1000 in ~0.5 s and a full reversal in ~1 s.
-    private static final double INTAKE_MAX_ACCEL_RPM_PER_SEC = 2000.0;
+    // Expressed as RPM per second at the output shaft. Sized below the motor's
+    // 1150 RPM top speed so the limit is meaningfully binding on both spin-up
+    // and reversal, not just reversal. At 1000 RPM/s: 0->setpoint(1000) in ~1 s,
+    // full 1000->-1000 reversal in ~2 s.
+    private static final double INTAKE_MAX_ACCEL_RPM_PER_SEC = 1000.0;
     private static final double INTAKE_MAX_ACCEL_TPS2        =
             INTAKE_MAX_ACCEL_RPM_PER_SEC * INTAKE_TICKS_PER_REV / 60.0;
     // Cap dt so a stalled first frame or a long pause can't produce a huge jump.
