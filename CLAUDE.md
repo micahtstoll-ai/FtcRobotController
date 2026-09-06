@@ -54,3 +54,63 @@ Rules:
 
 See `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/readme.md`
 for the "adding a new subsystem" checklist.
+
+## Coordinate conventions
+
+Sign fights on this robot (`265e697`, `00a647c`, `94cedda`, `e31e426`)
+all came from unwritten frame conventions. The choices below are the
+ones the current wiring, the pod directions in `RobotHardware`, and the
+drive math in `MecanumDrive` are consistent with. If you flip one, flip
+all three -- or you will spend a Saturday hunting a sign.
+
+Field frame (Pinpoint output after `RobotHardware.getPinpoint(...)`):
+
+- X = down-field (increases when the robot moves down-field from start)
+- Y = left       (increases when the robot moves to the driver's left)
+- Heading = CCW-positive, in radians (or degrees where the API demands)
+- Zero pose is set by `resetPosAndIMU()`; point the robot down-field
+  before calling it.
+
+Robot frame (input to `MecanumDrive.drive(...)`):
+
+- axial   = forward (+) / reverse (-)
+- lateral = right   (+) / left    (-)
+- yaw     = clockwise when viewed from above (+)
+
+Field-oriented rotation (`MecanumDrive.driveFieldOriented`) rotates a
+field-frame command into the robot frame using the standard 2D matrix
+with a CCW-positive heading. Do not add a negation anywhere in the
+chain; the pod directions in `RobotHardware` already produce the right
+sign end-to-end.
+
+## Java style that has bit us
+
+Short list. Every rule here is one where breaking it has cost real time
+on this repo. Not a complete style guide -- Java's defaults are fine
+for everything else.
+
+- Constants use `SCREAMING_SNAKE_CASE` and carry the unit in the name
+  when dimensional: `SLEW_RATE_RPM_PER_SEC`, `POD_OFFSET_MM`,
+  `TICKS_PER_REV`. Wrong-unit math on a motor is expensive; the name
+  is the last line of defense.
+
+- Every tuning constant carries a one-line rationale next to it -- the
+  *why* the number is what it is, not the *what*. "Max intake RPM" is
+  not a rationale; "Sized below the motor's 1150 RPM top speed so the
+  slew limit binds on both spin-up and reversal" is.
+
+- Buttons that toggle state or fire an event use edge detection:
+  `if (button && !prevButton) { ... }`. Raw `button` fires every loop
+  while held.
+
+- Use `sleep()` from `LinearOpMode`, never `Thread.sleep()`. The
+  LinearOpMode version respects `isStopRequested()`; `Thread.sleep()`
+  blocks the driver-station stop button until it returns.
+
+- Motors that use `setVelocity`, `getVelocity`, or PID configuration
+  must be typed `DcMotorEx`, not `DcMotor`. `DcMotor` compiles fine
+  and drops the velocity calls at runtime -- silent bug.
+
+- Comments explain WHY. Coordinate conventions, tuning tradeoffs, and
+  driver-station wiring quirks belong in comments. Button mnemonics
+  (`// Y toggles intake`) do not -- the code already says that.
