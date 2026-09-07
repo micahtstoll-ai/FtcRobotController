@@ -130,6 +130,27 @@ public class LimelightIntakeAssistTeleOp extends LinearOpMode {
             double driverAxial   = fieldForward * cos - fieldRight * sin;
             double driverLateral = fieldForward * sin + fieldRight * cos;
 
+            // TODO(apriltag-agent): wire the AprilTag corrector here.
+            // When AprilTagCorrector is built out (currently the scaffold in
+            // vision/), the wire-up needs to do three things together on
+            // each loop, in this order:
+            //   1. Ask LimelightPipelineScheduler.desiredPipeline(robotX,
+            //      robotY, heading, distanceToNextTarget, busyWithCloseTarget)
+            //      for the pipeline the camera should be on. Pass
+            //      busyWithCloseTarget = (hunter.state() == APPROACH_FINE)
+            //      so the scheduler never steals the cluster feed during
+            //      close pursuit.
+            //   2. If desired != current, call camera.raw().pipelineSwitch.
+            //   3. If desired == APRILTAG_PIPELINE_ID: capture the current
+            //      Pinpoint pose (oldX/oldY/oldH), call
+            //      corrector.tryApplyCorrection(camera.raw(), pinpoint, now).
+            //      If it returned true, read the new Pinpoint pose and call
+            //      world.rebasePose(oldX, oldY, oldH, newX, newY, newH) so
+            //      remembered cluster field positions stay put relative to
+            //      the robot, then scheduler.markCorrectionApplied(newX, newY).
+            // Skipping the rebase leaves stale cluster positions in the
+            // world model and produces a nonsense yaw command in the next
+            // coarse-approach tick. See ClusterWorldModel.rebasePose javadoc.
             BallClusterResult detections = camera.latest();
             double robotX = pose.getX(DistanceUnit.INCH);
             double robotY = pose.getY(DistanceUnit.INCH);
