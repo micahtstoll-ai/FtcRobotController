@@ -53,6 +53,10 @@ public class IntakeHunter {
     private long stateEnteredNanos = 0L;
     private int emptyFrameStreak = 0;
 
+    // Tracking for the current APPROACH_FINE pursuit. Reset on entry.
+    private double maxRadiusNormThisPursuit = 0.0;
+    private int framesWithoutTargetInFine = 0;
+
     public IntakeHunter(ClusterWorldModel world, CoarseApproachStrategy coarse) {
         this.world = world;
         this.coarse = coarse;
@@ -63,6 +67,8 @@ public class IntakeHunter {
         state = State.SCANNING;
         currentTargetId = -1;
         emptyFrameStreak = 0;
+        maxRadiusNormThisPursuit = 0.0;
+        framesWithoutTargetInFine = 0;
         coarse.stop();
     }
 
@@ -141,8 +147,7 @@ public class IntakeHunter {
             if (best != null) {
                 double dToBest = Math.hypot(best.fieldX - rx, best.fieldY - ry);
                 if (dToBest <= HuntConfig.COMMIT_DISTANCE_IN) {
-                    currentTargetId = best.id;
-                    transitionTo(State.APPROACH_FINE, nowNanos);
+                    startFinePursuit(best.id, nowNanos);
                     coarse.stop();
                     return DriveCommand.STOP;
                 }
@@ -162,8 +167,7 @@ public class IntakeHunter {
         if (Math.abs(bearing) <= HuntConfig.CONSUMPTION_BEARING_PAST_RAD * 0.5) {
             ClusterWorldModel.KnownCluster best = world.bestByBallCount();
             if (best != null) {
-                currentTargetId = best.id;
-                transitionTo(State.APPROACH_FINE, nowNanos);
+                startFinePursuit(best.id, nowNanos);
                 return DriveCommand.STOP;
             }
         }
@@ -224,16 +228,35 @@ public class IntakeHunter {
             return new DriveCommand(axial, lateral, yaw, true);
         }
 
-        // Bearing-only: use current camera's best cluster. Consume when its
-        // bearing swings past the "we drove past it" threshold OR when the
-        // camera sees no cluster at all this frame.
+        // Bearing-only: use the current camera's best cluster. A cluster is
+        // only "consumed" when we can be confident we drove through it, which
+        // requires having gotten close enough at some point during pursuit
+        // (max radiusNorm >= threshold). A momentarily-missing target is
+        // treated as a transient pipeline drop and tolerated; if it stays
+        // missing past a debounce and we were never close, drop back to
+        // coarse rather than turning away from a target we never reached.
         BallClusterResult.Cluster best = latestDetections.getBestCluster();
         if (best == null) {
-            transitionTo(State.CONSUMED_TURNOVER, nowNanos);
-            return DriveCommand.STOP;
+            framesWithoutTargetInFine++;
+            if (framesWithoutTargetInFine >= HuntConfig.CONSUMPTION_MISSED_FRAMES) {
+                if (maxRadiusNormThisPursuit >= HuntConfig.CONSUMPTION_MIN_RADIUS_NORM) {
+                    transitionTo(State.CONSUMED_TURNOVER, nowNanos);
+                } else {
+                    transitionTo(State.APPROACH_COARSE, nowNanos);
+                }
+                return DriveCommand.STOP;
+            }
+            // Short vision dropout: coast straight forward on the last
+            // known intent while the debounce counts up.
+            return bearingDrive(0.0, HuntConfig.BEARING_MODE_FORWARD_POWER * 0.5, true);
         }
+
+        framesWithoutTargetInFine = 0;
+        maxRadiusNormThisPursuit = Math.max(maxRadiusNormThisPursuit, best.radiusNorm);
+
         double bearing = -best.xNorm * (HuntConfig.CAMERA_HFOV_RAD / 2.0);
-        if (Math.abs(bearing) >= HuntConfig.CONSUMPTION_BEARING_PAST_RAD) {
+        if (Math.abs(bearing) >= HuntConfig.CONSUMPTION_BEARING_PAST_RAD
+                && maxRadiusNormThisPursuit >= HuntConfig.CONSUMPTION_MIN_RADIUS_NORM) {
             transitionTo(State.CONSUMED_TURNOVER, nowNanos);
             return DriveCommand.STOP;
         }
@@ -282,6 +305,18 @@ public class IntakeHunter {
             state = next;
             stateEnteredNanos = nowNanos;
         }
+    }
+
+    /**
+     * Lock onto a target and enter APPROACH_FINE with fresh pursuit
+     * tracking. Both hand-off points from APPROACH_COARSE go through this
+     * so the consumption debounce and proximity gate always start clean.
+     */
+    private void startFinePursuit(int targetId, long nowNanos) {
+        currentTargetId = targetId;
+        maxRadiusNormThisPursuit = 0.0;
+        framesWithoutTargetInFine = 0;
+        transitionTo(State.APPROACH_FINE, nowNanos);
     }
 
     private ClusterWorldModel.KnownCluster clusterById(int id) {

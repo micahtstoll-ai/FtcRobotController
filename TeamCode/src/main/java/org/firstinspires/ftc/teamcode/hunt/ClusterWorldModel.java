@@ -155,6 +155,45 @@ public class ClusterWorldModel {
         clusters.removeIf(k -> k.id == id);
     }
 
+    /**
+     * Rebase every remembered cluster's field position to match a hard
+     * reset of the robot's pose (typically from an AprilTag correction).
+     *
+     * <p>Cluster field positions are frozen at the pose the robot had when
+     * we last saw them. If the robot's pose is later hard-reset, those
+     * frozen positions become stale in the new frame: the physical clusters
+     * have not moved, but our belief about where they sit on the field is
+     * expressed against the wrong origin. Whoever applies an AprilTag fix
+     * must capture the robot pose immediately before the reset, then call
+     * this method with the pre- and post-reset pose so cluster positions
+     * stay put relative to the robot.
+     *
+     * <p>Skipping this call after a correction lets the pose jump propagate
+     * into the coarse-approach centroid, producing a nonsense yaw command
+     * on the next tick.
+     *
+     * <p>Bearing-only entries carry no field position and are not touched.
+     *
+     * @param oldX  robot field X in inches, before the reset
+     * @param oldY  robot field Y in inches, before the reset
+     * @param oldH  robot heading in radians, before the reset
+     * @param newX  robot field X in inches, after the reset
+     * @param newY  robot field Y in inches, after the reset
+     * @param newH  robot heading in radians, after the reset
+     */
+    public void rebasePose(double oldX, double oldY, double oldH,
+                           double newX, double newY, double newH) {
+        double dTheta = newH - oldH;
+        double cos = Math.cos(dTheta);
+        double sin = Math.sin(dTheta);
+        for (KnownCluster k : clusters) {
+            double dx = k.fieldX - oldX;
+            double dy = k.fieldY - oldY;
+            k.fieldX = newX + dx * cos - dy * sin;
+            k.fieldY = newY + dx * sin + dy * cos;
+        }
+    }
+
     /** The remembered cluster with the largest estimated ball count, or null. */
     public KnownCluster bestByBallCount() {
         KnownCluster best = null;
