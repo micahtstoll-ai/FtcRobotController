@@ -147,8 +147,36 @@ public final class HuntConfig {
      * the last-observed best cluster has a bearing whose absolute value
      * exceeds this threshold (radians). That is: "the target has swung to
      * our side or behind us" - we drove past it.
+     *
+     * <p>Only accepted as a consumption signal if the pursuit ever reached
+     * {@link #CONSUMPTION_MIN_RADIUS_NORM}, so a far target that drifted to
+     * the edge of the frame does not falsely mark as consumed.
      */
     public static final double CONSUMPTION_BEARING_PAST_RAD = Math.toRadians(60.0);
+
+    /**
+     * Bearing-only consumption proximity gate. We only accept the
+     * "bearing swung past {@link #CONSUMPTION_BEARING_PAST_RAD}" signal
+     * (or the "cluster vanished from frame" signal) if the target's
+     * apparent blob radius reached at least this value at some point
+     * during pursuit. Range [0..1] where 1 fills the frame. Without this
+     * gate, a distant cluster that yaw lag pushed to a wide bearing would
+     * be marked consumed without the intake ever reaching it. Tune during
+     * test; 0.25 corresponds roughly to the cluster occupying a quarter
+     * of the image.
+     */
+    public static final double CONSUMPTION_MIN_RADIUS_NORM = 0.25;
+
+    /**
+     * Bearing-only debounce: how many consecutive APPROACH_FINE frames the
+     * camera has to see no target before we treat the disappearance as
+     * something to act on. Below this the frame is treated as a transient
+     * pipeline drop and the hunter coasts on last-known intent. On reaching
+     * the threshold, disappearance means "consumed" only if
+     * {@link #CONSUMPTION_MIN_RADIUS_NORM} was reached during pursuit;
+     * otherwise the hunter falls back to APPROACH_COARSE.
+     */
+    public static final int CONSUMPTION_MISSED_FRAMES = 5;
 
     // ---------------------------------------------------------------------
     // World model - how the robot remembers where clusters are.
