@@ -25,12 +25,19 @@ public final class RobotHardware {
     public static final String LEFT_REAR   = "leftRear";
     public static final String RIGHT_REAR  = "rightRear";
     public static final String INTAKE      = "intake";
+    public static final String SHOOTER     = "shooter";
+    public static final String TRANSFER    = "transfer";
     public static final String PINPOINT    = "pinpoint";
 
-    // Pinpoint pod geometry, in millimeters. Signs verified with AutoCalibrateOdometry:
-    // push forward -> X increases, push left -> Y increases.
-    public static final double PINPOINT_FORWARD_POD_Y_MM = -90.0;
-    public static final double PINPOINT_STRAFE_POD_X_MM  = -12.0;
+    // Pinpoint pod geometry, in millimeters, measured from the drivetrain's
+    // center of rotation. forwardPodY: left (+) / right (-) offset of the pod that
+    // reads forward motion. strafePodX: forward (+) / back (-) offset of the pod
+    // that reads sideways motion.
+    // Measured to each wheel's floor contact: forward pod 3.06 in right of center,
+    // strafe pod 132 mm behind center. Re-verify pod signs with
+    // AutoCalibrateOdometry after any change.
+    public static final double PINPOINT_FORWARD_POD_Y_MM = -3.06 * 25.4;
+    public static final double PINPOINT_STRAFE_POD_X_MM  = -132.0;
 
     public static final GoBildaPinpointDriver.GoBildaOdometryPods PINPOINT_POD_TYPE =
             GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD;
@@ -44,6 +51,10 @@ public final class RobotHardware {
     public static final DcMotorSimple.Direction LEFT_REAR_DIR   = DcMotorSimple.Direction.FORWARD;
     public static final DcMotorSimple.Direction RIGHT_FRONT_DIR = DcMotorSimple.Direction.REVERSE;
     public static final DcMotorSimple.Direction RIGHT_REAR_DIR  = DcMotorSimple.Direction.REVERSE;
+
+    // Flip either of these if the mechanism spins backwards on a positive RPM.
+    public static final DcMotorSimple.Direction SHOOTER_DIR  = DcMotorSimple.Direction.FORWARD;
+    public static final DcMotorSimple.Direction TRANSFER_DIR = DcMotorSimple.Direction.FORWARD;
 
     /** Bundle of the four mecanum drive motors, direction-configured and BRAKE-set. */
     public static final class DriveMotors {
@@ -89,6 +100,32 @@ public final class RobotHardware {
         intake.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         return intake;
+    }
+
+    /**
+     * Shooter flywheel configured for closed-loop velocity control with FLOAT
+     * zero-power behavior so the flywheel coasts down instead of being braked.
+     */
+    public static DcMotorEx getShooter(HardwareMap hardwareMap) {
+        DcMotorEx shooter = hardwareMap.get(DcMotorEx.class, SHOOTER);
+        shooter.setDirection(SHOOTER_DIR);
+        shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        return shooter;
+    }
+
+    /**
+     * Transfer configured for closed-loop velocity control with BRAKE zero-power
+     * behavior so a game piece stops short of the flywheel when the feed is released.
+     */
+    public static DcMotorEx getTransfer(HardwareMap hardwareMap) {
+        DcMotorEx transfer = hardwareMap.get(DcMotorEx.class, TRANSFER);
+        transfer.setDirection(TRANSFER_DIR);
+        transfer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        transfer.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        transfer.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        return transfer;
     }
 
     /**
