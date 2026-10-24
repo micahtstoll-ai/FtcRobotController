@@ -20,14 +20,16 @@ public final class RobotHardware {
 
     // Hardware-map configuration names. These must match the Driver Station
     // config on the Control Hub; renaming here without renaming there fails at init.
-    public static final String LEFT_FRONT  = "leftFront";
-    public static final String RIGHT_FRONT = "rightFront";
-    public static final String LEFT_REAR   = "leftRear";
-    public static final String RIGHT_REAR  = "rightRear";
-    public static final String INTAKE      = "intake";
-    public static final String SHOOTER     = "shooter";
-    public static final String TRANSFER    = "transfer";
-    public static final String PINPOINT    = "pinpoint";
+    // Wiring (Main = Control Hub, Exp = Expansion Hub). Encoder cables for intake,
+    // index, and launch must sit on the encoder port matching their motor port.
+    public static final String LEFT_FRONT  = "leftFront";   // Main motor 3
+    public static final String RIGHT_FRONT = "rightFront";  // Exp  motor 0
+    public static final String LEFT_REAR   = "leftBack";    // Main motor 2
+    public static final String RIGHT_REAR  = "rightBack";   // Exp  motor 1
+    public static final String INTAKE      = "intake";      // Main motor 1
+    public static final String SHOOTER     = "launch";      // Exp  motor 3
+    public static final String TRANSFER    = "index";       // Main motor 0
+    public static final String PINPOINT    = "pinpoint";    // Main I2C bus 0
 
     // Pinpoint pod geometry, in millimeters, measured from the drivetrain's
     // center of rotation. forwardPodY: left (+) / right (-) offset of the pod that
