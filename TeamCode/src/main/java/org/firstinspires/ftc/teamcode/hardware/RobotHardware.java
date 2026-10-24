@@ -33,10 +33,10 @@ public final class RobotHardware {
     // center of rotation. forwardPodY: left (+) / right (-) offset of the pod that
     // reads forward motion. strafePodX: forward (+) / back (-) offset of the pod
     // that reads sideways motion.
-    // Strafe pod is 132 mm behind center on the current robot. The forward-pod
-    // value is carried over from the pre-season robot and has NOT been measured
-    // on this one. Re-verify pod signs with AutoCalibrateOdometry after any change.
-    public static final double PINPOINT_FORWARD_POD_Y_MM = -90.0;
+    // Measured to each wheel's floor contact: forward pod 3.06 in left of center,
+    // strafe pod 132 mm behind center. Re-verify pod signs with
+    // AutoCalibrateOdometry after any change.
+    public static final double PINPOINT_FORWARD_POD_Y_MM = 3.06 * 25.4;
     public static final double PINPOINT_STRAFE_POD_X_MM  = -132.0;
 
     public static final GoBildaPinpointDriver.GoBildaOdometryPods PINPOINT_POD_TYPE =
