@@ -31,9 +31,14 @@ public class Constants {
             .forwardEncoderDirection(RobotHardware.PINPOINT_FORWARD_DIR)
             .strafeEncoderDirection(RobotHardware.PINPOINT_STRAFE_DIR);
 
-    // Pedro's MecanumConstants defaults are flipped from this robot's wiring;
-    // override every direction explicitly from RobotHardware.
+    // Pedro's MecanumConstants defaults are flipped from this robot's wiring and
+    // its default motor names do not match this config; override every name and
+    // direction explicitly from RobotHardware.
     public static MecanumConstants mecanumConstants = new MecanumConstants()
+            .leftFrontMotorName(RobotHardware.LEFT_FRONT)
+            .leftRearMotorName(RobotHardware.LEFT_REAR)
+            .rightFrontMotorName(RobotHardware.RIGHT_FRONT)
+            .rightRearMotorName(RobotHardware.RIGHT_REAR)
             .leftFrontMotorDirection(RobotHardware.LEFT_FRONT_DIR)
             .leftRearMotorDirection(RobotHardware.LEFT_REAR_DIR)
             .rightFrontMotorDirection(RobotHardware.RIGHT_FRONT_DIR)
