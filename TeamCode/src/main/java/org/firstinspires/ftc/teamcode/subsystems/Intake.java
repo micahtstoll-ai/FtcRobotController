@@ -1,7 +1,9 @@
 package org.firstinspires.ftc.teamcode.subsystems;
 
+import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.PIDFCoefficients;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.hardware.RobotHardware;
@@ -19,6 +21,11 @@ public class Intake {
     public static final double MIN_RPM       = 0.0;
     public static final double MAX_RPM       = 1150.0;
 
+    // Hub velocity PIDF. Starting values from REV's recipe at nominal free speed
+    // (F = 32767 / max ticks/s, P = 0.1 F, I = 0.1 P); not yet tuned on the robot.
+    // Tune with "TeleOp: Tune Velocity PIDF" and copy the result here.
+    public static final PIDFCoefficients PIDF = new PIDFCoefficients(1.18, 0.118, 0.0, 11.8);
+
     // Sized below the motor's top speed so the limit binds on both spin-up and
     // reversal, not only reversal. At 1000 RPM/s: 0 -> setpoint(1000) in ~1 s,
     // full 1000 -> -1000 reversal in ~2 s.
@@ -34,6 +41,7 @@ public class Intake {
 
     public Intake(HardwareMap hardwareMap) {
         this.motor = RobotHardware.getIntake(hardwareMap);
+        motor.setPIDFCoefficients(DcMotor.RunMode.RUN_USING_ENCODER, PIDF);
     }
 
     /**

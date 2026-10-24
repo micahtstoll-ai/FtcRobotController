@@ -9,10 +9,12 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.teamcode.hardware.RobotHardware;
 import org.firstinspires.ftc.teamcode.subsystems.Intake;
 import org.firstinspires.ftc.teamcode.subsystems.MecanumDrive;
+import org.firstinspires.ftc.teamcode.subsystems.Shooter;
+import org.firstinspires.ftc.teamcode.subsystems.Transfer;
 
 /**
  * Driver-controlled OpMode. Field-oriented mecanum drive with a slow-mode
- * modifier and a velocity-controlled intake.
+ * modifier and velocity-controlled intake, transfer, and shooter.
  *
  * Gamepad 1:
  *   left stick        translate on the field (up = down-field)
@@ -20,9 +22,12 @@ import org.firstinspires.ftc.teamcode.subsystems.MecanumDrive;
  *   right bumper      slow mode (hold)
  *   options / B       reset field-forward heading to current pose
  *   Y                 toggle intake on/off (starts ON)
- *   left trigger      reverse intake while held (past threshold)
- *   X                 toggle setpoint-trim mode
- *   dpad up/down      +/- RPM when in trim mode
+ *   left bumper       reverse intake while held
+ *   X                 toggle intake setpoint-trim mode
+ *   dpad up/down      +/- intake RPM when in trim mode
+ *   left trigger      spin shooter to target while held (coasts on release)
+ *   right trigger     run transfer (feed shooter) while held
+ *   dpad left/right   -/+ shooter target RPM
  */
 @TeleOp(name = "TeleOp: Main", group = "Linear OpMode")
 public class TeleOpMain extends LinearOpMode {
@@ -30,12 +35,18 @@ public class TeleOpMain extends LinearOpMode {
     private static final double SLOW_MODE_SCALE          = 0.35;
     private static final double INTAKE_INITIAL_RPM       = 1000.0;
     private static final double INTAKE_RPM_STEP          = 25.0;
-    private static final double INTAKE_TRIGGER_THRESHOLD = 0.25;
+    private static final double TRIGGER_THRESHOLD        = 0.25;
+    // Placeholder speeds: set from field testing.
+    private static final double SHOOTER_INITIAL_RPM      = 4000.0;
+    private static final double SHOOTER_RPM_STEP         = 100.0;
+    private static final double TRANSFER_FEED_RPM        = 3000.0;
 
     @Override
     public void runOpMode() {
         MecanumDrive drive  = new MecanumDrive(hardwareMap);
         Intake       intake = new Intake(hardwareMap);
+        Shooter      shooter  = new Shooter(hardwareMap);
+        Transfer     transfer = new Transfer(hardwareMap);
         GoBildaPinpointDriver pinpoint = RobotHardware.getPinpoint(hardwareMap);
 
         // Point the robot down-field before init: this zero becomes field-forward.
@@ -51,10 +62,13 @@ public class TeleOpMain extends LinearOpMode {
         boolean prevIntakeTrim   = false;
         boolean prevDpadUp       = false;
         boolean prevDpadDown     = false;
+        boolean prevDpadLeft     = false;
+        boolean prevDpadRight    = false;
 
         double  intakeTargetRpm = INTAKE_INITIAL_RPM;
         boolean intakeEnabled   = true;
         boolean intakeTrimMode  = false;
+        double  shooterTargetRpm = SHOOTER_INITIAL_RPM;
 
         while (opModeIsActive()) {
             boolean resetButton = gamepad1.options || gamepad1.b;
@@ -98,11 +112,24 @@ public class TeleOpMain extends LinearOpMode {
             prevDpadUp   = dpadUp;
             prevDpadDown = dpadDown;
 
-            boolean intakeReverse = gamepad1.left_trigger > INTAKE_TRIGGER_THRESHOLD;
+            boolean intakeReverse = gamepad1.left_bumper;
             double desiredRpm = intakeEnabled
                     ? (intakeReverse ? -intakeTargetRpm : intakeTargetRpm)
                     : 0.0;
             intake.setDesiredRpm(desiredRpm);
+
+            boolean dpadLeft  = gamepad1.dpad_left;
+            boolean dpadRight = gamepad1.dpad_right;
+            if (dpadLeft  && !prevDpadLeft)  shooterTargetRpm -= SHOOTER_RPM_STEP;
+            if (dpadRight && !prevDpadRight) shooterTargetRpm += SHOOTER_RPM_STEP;
+            shooterTargetRpm = Math.max(0.0, Math.min(Shooter.MAX_RPM, shooterTargetRpm));
+            prevDpadLeft  = dpadLeft;
+            prevDpadRight = dpadRight;
+
+            boolean shooterOn  = gamepad1.left_trigger  > TRIGGER_THRESHOLD;
+            boolean transferOn = gamepad1.right_trigger > TRIGGER_THRESHOLD;
+            shooter.setTargetRpm(shooterOn ? shooterTargetRpm : 0.0);
+            transfer.setDesiredRpm(transferOn ? TRANSFER_FEED_RPM : 0.0);
 
             telemetry.addData("Mode", gamepad1.right_bumper ? "SLOW" : "normal");
             telemetry.addData("Intake",
@@ -113,6 +140,13 @@ public class TeleOpMain extends LinearOpMode {
                     intakeTargetRpm,
                     intake.getCommandedRpm(),
                     intake.getActualRpm());
+            telemetry.addData("Shooter", "%s target=%.0f actual=%.0f rpm",
+                    shooter.isReady() ? "READY" : (shooterOn ? "spinning up" : "off"),
+                    shooterTargetRpm,
+                    shooter.getActualRpm());
+            telemetry.addData("Transfer", "%s actual=%.0f rpm",
+                    transferOn ? "FEED" : "off",
+                    transfer.getActualRpm());
             telemetry.addData("Heading (deg)", "%.1f", pose.getHeading(AngleUnit.DEGREES));
             telemetry.addData("Field", "fwd=%.2f right=%.2f yaw=%.2f",
                     fieldForward, fieldRight, yaw);
